@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Website Support
+    url: https://kiefer-app.ai/contact
+    about: Please contact us directly for urgent support requests.
+  - name: Documentation
+    url: https://github.com/yourusername/kiefer-website/wiki
+    about: Check our documentation for answers to common questions.

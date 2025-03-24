@@ -1,0 +1,153 @@
+name: Run All Checks
+
+on:
+  workflow_dispatch:  # Allows manual triggering of the workflow
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+      
+      - name: Install HTML validator
+        run: npm install -g html-validate
+      
+      - name: Validate HTML
+        run: html-validate "*.html"
+      
+      - name: Install CSS validator
+        run: npm install -g stylelint stylelint-config-standard
+      
+      - name: Create Stylelint config
+        run: |
+          echo '{
+            "extends": "stylelint-config-standard"
+          }' > .stylelintrc.json
+      
+      - name: Validate CSS
+        run: stylelint "*.css"
+  
+  check-links:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+      
+      - name: Install link checker
+        run: npm install -g broken-link-checker
+      
+      - name: Check links (local files)
+        run: blc -ro --filter-level 2 --exclude github.com --exclude linkedin.com --exclude facebook.com *.html
+  
+  accessibility:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+      
+      - name: Install pa11y
+        run: npm install -g pa11y
+      
+      - name: Check accessibility (index.html)
+        run: |
+          # Start a simple HTTP server
+          npx http-server -p 8080 &
+          SERVER_PID=$!
+          
+          # Wait for server to start
+          sleep 5
+          
+          # Run accessibility check
+          pa11y --reporter cli http://localhost:8080/index.html
+          
+          # Kill the server
+          kill $SERVER_PID
+  
+  performance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+      
+      - name: Install Lighthouse CI
+        run: npm install -g @lhci/cli
+      
+      - name: Start HTTP server
+        run: |
+          npx http-server -p 8080 &
+          SERVER_PID=$!
+          echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
+          
+          # Wait for server to start
+          sleep 5
+      
+      - name: Run Lighthouse CI
+        run: |
+          lhci autorun --config=./lighthouserc.json --collect.url=http://localhost:8080/index.html
+      
+      - name: Stop HTTP server
+        run: kill ${{ env.SERVER_PID }}
+        if: always()  # Ensure server is stopped even if previous steps fail
+  
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+      
+      - name: Install OWASP ZAP
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openjdk-11-jre-headless
+          wget https://github.com/zaproxy/zaproxy/releases/download/v2.12.0/ZAP_2.12.0_Linux.tar.gz
+          tar -xvf ZAP_2.12.0_Linux.tar.gz
+          
+      - name: Start HTTP server
+        run: |
+          npx http-server -p 8080 &
+          SERVER_PID=$!
+          echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
+          
+          # Wait for server to start
+          sleep 5
+      
+      - name: Run ZAP Scan
+        run: |
+          cd ZAP_2.12.0
+          ./zap.sh -cmd -quickurl http://localhost:8080/index.html -quickprogress -quickout ../zap-report.html
+      
+      - name: Stop HTTP server
+        run: kill ${{ env.SERVER_PID }}
+        if: always()  # Ensure server is stopped even if previous steps fail
+      
+      - name: Upload ZAP Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: zap-report
+          path: zap-report.html

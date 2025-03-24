@@ -1,0 +1,28 @@
+name: Check for Broken Links
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # Run weekly on Sunday at midnight
+  workflow_dispatch:  # Allows manual triggering of the workflow
+
+jobs:
+  check-links:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+      
+      - name: Install link checker
+        run: npm install -g broken-link-checker
+      
+      - name: Check links (local files)
+        run: blc -ro --filter-level 2 --exclude github.com --exclude linkedin.com --exclude facebook.com *.html
+      
+      - name: Check links (deployed site)
+        if: github.event_name == 'schedule'  # Only run on scheduled events
+        run: blc -ro --filter-level 2 --exclude github.com --exclude linkedin.com --exclude facebook.com https://kiefer-app.ai
